@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecte PWA JSON & Live Preview UI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Quadrillage aimanté parfaitement aligné (20px * 20px) */
+    .grid-bg {
+      background-size: 20px 20px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    /* Halos lumineux d'outils */
+    .tool-glow-amber { box-shadow: 0 0 12px rgba(245, 158, 11, 0.4); }
+    .tool-glow-purple { box-shadow: 0 0 12px rgba(168, 85, 247, 0.4); }
+    .tool-glow-blue { box-shadow: 0 0 12px rgba(59, 130, 246, 0.4); }
+    .tool-glow-emerald { box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
+    .tool-glow-pink { box-shadow: 0 0 12px rgba(236, 72, 153, 0.4); }
+    .tool-glow-cyan { box-shadow: 0 0 12px rgba(6, 182, 212, 0.4); }
+
+    /* Scrollbars personnalisées */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #09090b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3f3f46;
+    }
+  </style>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#050608">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="./icon.png">
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-4 font-sans select-none overflow-x-hidden">
+
+  <div class="flex items-center gap-6 my-auto">
+
+    <!-- Barre d'outils verticale -->
+    <div class="flex flex-col gap-2 bg-zinc-900/90 backdrop-blur border border-zinc-800 p-2.5 rounded-2xl shadow-2xl z-40">
+      
+      <!-- 1. Outil Rect -->
+      <button id="tool-rect" class="tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/50 tool-glow-amber transition-all duration-200 active:scale-95" title="Créer un rectangle">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="4 2" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Rect</span>
+      </button>
+
+      <!-- 2. Outil Cercle -->
+      <button id="tool-circle" class="tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-zinc-800/60 text-zinc-400 border border-transparent transition-all duration-200 active:scale-95" title="Créer un cercle">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9" stroke-dasharray="4 2" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Cercle</span>
+      </button>
+
+      <!-- 3. Outil Move -->
+      <button id="tool-move" class="tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-zinc-800/60 text-zinc-400 border border-transparent transition-all duration-200 active:scale-95" title="Déplacer (Shift = Cloner)">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4M9 8L5 12l4 4m6-8l4 4-4 4" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Bouger</span>
+      </button>
+
+      <!-- 4. Outil Resize -->
+      <button id="tool-resize" class="tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-zinc-800/60 text-zinc-400 border border-transparent transition-all duration-200 active:scale-95" title="Redimensionner">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Taille</span>
+      </button>
+
+      <hr class="border-zinc-800 my-0.5">
+
+      <!-- 5. Live Preview UI -->
+      <button id="btn-live-preview" class="w-14 h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-pink-500/20 text-pink-400 hover:bg-pink-500/30 border border-pink-500/40 tool-glow-pink transition-all active:scale-95 group" title="Aperçu Live UI">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Preview</span>
+      </button>
+
+      <!-- 6. Bibliothèque de Templates -->
+      <button id="btn-templates" class="w-14 h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/40 tool-glow-cyan transition-all active:scale-95 group" title="Templates JSON">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Templates</span>
+      </button>
+
+      <!-- 7. Manager JSON -->
+      <button id="btn-json" class="w-14 h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-zinc-800/60 text-indigo-400 hover:bg-indigo-500/10 border border-transparent transition-all active:scale-95 group" title="Manager JSON">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">JSON</span>
+      </button>
+
+      <!-- Bouton Reset -->
+      <button id="tool-clear" class="w-14 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-zinc-800/60 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent transition-all active:scale-95 group" title="Tout effacer">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform group-hover:rotate-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        <span class="text-[7px] font-bold tracking-wider uppercase">Reset</span>
+      </button>
+
+    </div>
+
+    <!-- Écran Smartphone (360px de largeur utile = 18 colonnes exactes) -->
+    <div class="relative w-[368px] h-[748px] bg-zinc-900 border-4 border-zinc-800 rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
+      
+      <!-- Dynamic Island -->
+      <div class="absolute top-2 left-1/2 -translate-x-1/2 w-28 h-4 bg-zinc-950 rounded-full z-30"></div>
+
+      <!-- Zone Grille Symétrique -->
+      <div id="screen-container" class="relative w-[360px] h-[700px] mx-auto mt-4 grid-bg overflow-hidden cursor-crosshair touch-none">
+        <canvas id="draw-canvas" class="absolute inset-0 z-10 pointer-events-none"></canvas>
+        <div id="shapes-layer" class="absolute inset-0 z-0"></div>
+      </div>
+
+      <!-- Barre de statut -->
+      <div class="h-7 bg-zinc-950 flex items-center justify-between px-4 text-[10px] text-zinc-500 border-t border-zinc-800/80 font-mono">
+        <span id="coord-info">X: 0 | Y: 0</span>
+        <span id="mode-info" class="text-amber-400 font-bold uppercase">Rectangle</span>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- MODALE LIVE PREVIEW UI -->
+  <div id="preview-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-pop">
+      <div class="px-5 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/80">
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-pink-500 animate-pulse"></div>
+          <h3 class="font-bold text-zinc-200 text-sm">Rendu UI Live (Simulateur PWA)</h3>
+        </div>
+        <button id="close-preview-modal" class="text-zinc-400 hover:text-white text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="p-4 flex-1 overflow-y-auto flex justify-center bg-zinc-950">
+        <!-- Frame du smartphone rendu -->
+        <div class="relative w-[360px] h-[700px] bg-zinc-900 rounded-[32px] border-2 border-zinc-800 shadow-2xl overflow-hidden text-zinc-100 flex flex-col">
+          <!-- Dynamic Notch -->
+          <div class="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-3.5 bg-zinc-950 rounded-full z-40"></div>
+          
+          <!-- Conteneur des composants réels générés -->
+          <div id="live-ui-viewport" class="relative w-full h-full bg-zinc-950 overflow-y-auto pt-6"></div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
+        <span>Généré depuis les rôles sémantiques</span>
+        <button id="btn-close-preview-footer" class="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl font-semibold transition">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE BIBLIOTHÈQUE DE TEMPLATES -->
+  <div id="templates-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <h3 class="font-bold text-zinc-200 flex items-center gap-2 text-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+          Bibliothèque de Templates UI (JSON)
+        </h3>
+        <button id="close-templates-modal" class="text-zinc-400 hover:text-white text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="p-6 flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        <!-- Template 1: Dashboard -->
+        <div class="bg-zinc-950 border border-zinc-800 hover:border-cyan-500/50 p-4 rounded-xl flex flex-col justify-between group transition">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-bold text-sm text-zinc-100 group-hover:text-cyan-400 transition">Dashboard Analytics</h4>
+              <span class="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-full font-mono">Mobile</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-4">Header avec avatar, barres de recherche, 2 cartes de KPIs et navigation inférieure.</p>
+          </div>
+          <button onclick="loadPresetTemplate('dashboard')" class="w-full py-2 bg-zinc-800 hover:bg-cyan-600 hover:text-white text-zinc-200 text-xs font-semibold rounded-lg transition active:scale-95">Charger le Template</button>
+        </div>
+
+        <!-- Template 2: E-commerce -->
+        <div class="bg-zinc-950 border border-zinc-800 hover:border-amber-500/50 p-4 rounded-xl flex flex-col justify-between group transition">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-bold text-sm text-zinc-100 group-hover:text-amber-400 transition">E-Commerce Feed</h4>
+              <span class="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full font-mono">Boutique</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-4">Recherche haut, bannière promo centrale, grille 2 colonnes de produits et bouton d'achat.</p>
+          </div>
+          <button onclick="loadPresetTemplate('ecommerce')" class="w-full py-2 bg-zinc-800 hover:bg-amber-600 hover:text-white text-zinc-200 text-xs font-semibold rounded-lg transition active:scale-95">Charger le Template</button>
+        </div>
+
+        <!-- Template 3: Chat / Messagerie -->
+        <div class="bg-zinc-950 border border-zinc-800 hover:border-purple-500/50 p-4 rounded-xl flex flex-col justify-between group transition">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-bold text-sm text-zinc-100 group-hover:text-purple-400 transition">Messagerie / Chat</h4>
+              <span class="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-full font-mono">Social</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-4">Header conversation avec statut, bulles de messages alternées et barre de saisie d'envoi.</p>
+          </div>
+          <button onclick="loadPresetTemplate('chat')" class="w-full py-2 bg-zinc-800 hover:bg-purple-600 hover:text-white text-zinc-200 text-xs font-semibold rounded-lg transition active:scale-95">Charger le Template</button>
+        </div>
+
+        <!-- Template 4: Profile / Settings -->
+        <div class="bg-zinc-950 border border-zinc-800 hover:border-emerald-500/50 p-4 rounded-xl flex flex-col justify-between group transition">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-bold text-sm text-zinc-100 group-hover:text-emerald-400 transition">Profil & Paramètres</h4>
+              <span class="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full font-mono">User</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-4">Grand avatar circulaire, infos utilisateur, liste d'options/cartes de réglages et bouton déconnexion.</p>
+          </div>
+          <button onclick="loadPresetTemplate('profile')" class="w-full py-2 bg-zinc-800 hover:bg-emerald-600 hover:text-white text-zinc-200 text-xs font-semibold rounded-lg transition active:scale-95">Charger le Template</button>
+        </div>
+
+      </div>
+
+      <div class="px-6 py-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
+        <span>Le chargement écrasera la grille actuelle</span>
+        <button id="btn-close-templates-footer" class="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl font-semibold transition">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE JSON PUR (COPIER / IMPORTER / EXPORTER) -->
+  <div id="json-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <h3 class="font-bold text-zinc-200 flex items-center gap-2 text-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          Gestionnaire de Fichier JSON
+        </h3>
+        <button id="close-modal" class="text-zinc-400 hover:text-white text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="p-6 flex-1 overflow-y-auto space-y-4">
+        <!-- Zone Fichier Import rapide -->
+        <div class="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+          <span class="text-xs text-zinc-400 font-medium">Charger un fichier .json local :</span>
+          <input type="file" id="file-input" accept=".json" class="hidden">
+          <button id="btn-trigger-file" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition active:scale-95">Parcourir...</button>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-zinc-400 uppercase mb-2">Structure JSON de la plateforme</label>
+          <textarea id="json-textarea" class="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-2">
+        <button id="btn-import-json" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition active:scale-95">Importer le JSON</button>
+        <div class="flex items-center gap-2">
+          <button id="btn-download-json" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition active:scale-95 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Exporter .JSON
+          </button>
+          <button id="btn-copy-json" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition active:scale-95">Copier JSON</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GRID_SIZE = 20;
+    let currentMode = 'rect';
+
+    const container = document.getElementById('screen-container');
+    const canvas = document.getElementById('draw-canvas');
+    const ctx = canvas.getContext('2d');
+    const shapesLayer = document.getElementById('shapes-layer');
+    const coordInfo = document.getElementById('coord-info');
+    const modeInfo = document.getElementById('mode-info');
+
+    const toolRect = document.getElementById('tool-rect');
+    const toolCircle = document.getElementById('tool-circle');
+    const toolMove = document.getElementById('tool-move');
+    const toolResize = document.getElementById('tool-resize');
+    const toolClear = document.getElementById('tool-clear');
+    
+    // JSON Modal
+    const btnJson = document.getElementById('btn-json');
+    const jsonModal = document.getElementById('json-modal');
+    const closeModal = document.getElementById('close-modal');
+    const jsonTextarea = document.getElementById('json-textarea');
+    const btnCopyJson = document.getElementById('btn-copy-json');
+    const btnDownloadJson = document.getElementById('btn-download-json');
+    const btnImportJson = document.getElementById('btn-import-json');
+    const fileInput = document.getElementById('file-input');
+    const btnTriggerFile = document.getElementById('btn-trigger-file');
+
+    // Live Preview Modal
+    const btnLivePreview = document.getElementById('btn-live-preview');
+    const previewModal = document.getElementById('preview-modal');
+    const closePreviewModal = document.getElementById('close-preview-modal');
+    const btnClosePreviewFooter = document.getElementById('btn-close-preview-footer');
+    const liveUiViewport = document.getElementById('live-ui-viewport');
+
+    // Templates Modal
+    const btnTemplates = document.getElementById('btn-templates');
+    const templatesModal = document.getElementById('templates-modal');
+    const closeTemplatesModal = document.getElementById('close-templates-modal');
+    const btnCloseTemplatesFooter = document.getElementById('btn-close-templates-footer');
+
+    let isDrawing = false, isDragging = false, isResizing = false, isShiftPressed = false;
+    let activeTile = null, cloneTileGhost = null, resizeHandle = null;
+    let startX = 0, startY = 0, currentX = 0, currentY = 0;
+    let initialTileX = 0, initialTileY = 0, initialTileW = 0, initialTileH = 0;
+    let targetClonePos = { x: 0, y: 0 };
+
+    window.addEventListener('keydown', (e) => { if (e.key === 'Shift') isShiftPressed = true; });
+    window.addEventListener('keyup', (e) => { if (e.key === 'Shift') isShiftPressed = false; });
+
+    function resizeCanvas() {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+    resizeCanvas();
+
+    function snapToGrid(val) { return Math.round(val / GRID_SIZE) * GRID_SIZE; }
+
+    function getPos(e) {
+      const rect = container.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: Math.max(0, Math.min(clientX - rect.left, rect.width)),
+        y: Math.max(0, Math.min(clientY - rect.top, rect.height))
+      };
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      [toolRect, toolCircle, toolMove, toolResize].forEach(btn => {
+        btn.className = "tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-zinc-800/60 text-zinc-400 border border-transparent transition-all duration-200 active:scale-95";
+      });
+
+      if (mode === 'rect') {
+        toolRect.className = "tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/50 tool-glow-amber transition-all duration-200 active:scale-95";
+        modeInfo.textContent = 'Rectangle'; modeInfo.className = 'text-amber-400 font-bold uppercase';
+      } else if (mode === 'circle') {
+        toolCircle.className = "tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/50 tool-glow-purple transition-all duration-200 active:scale-95";
+        modeInfo.textContent = 'Cercle'; modeInfo.className = 'text-purple-400 font-bold uppercase';
+      } else if (mode === 'move') {
+        toolMove.className = "tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/50 tool-glow-blue transition-all duration-200 active:scale-95";
+        modeInfo.textContent = 'Bouger (+Shift)'; modeInfo.className = 'text-blue-400 font-bold uppercase';
+      } else if (mode === 'resize') {
+        toolResize.className = "tool-btn relative group w-14 h-11 py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 tool-glow-emerald transition-all duration-200 active:scale-95";
+        modeInfo.textContent = 'Taille'; modeInfo.className = 'text-emerald-400 font-bold uppercase';
+      }
+      updateTilesUI();
+    }
+
+    toolRect.addEventListener('click', () => setMode('rect'));
+    toolCircle.addEventListener('click', () => setMode('circle'));
+    toolMove.addEventListener('click', () => setMode('move'));
+    toolResize.addEventListener('click', () => setMode('resize'));
+
+    toolClear.addEventListener('click', () => {
+      shapesLayer.innerHTML = '';
+      saveToLocalStorage();
+      if (navigator.vibrate) navigator.vibrate(20);
+    });
+
+    function updateTilesUI() {
+      const tiles = shapesLayer.querySelectorAll('.tile-item');
+      tiles.forEach(tile => {
+        const handles = tile.querySelectorAll('.resize-handle');
+        if (currentMode === 'resize') {
+          handles.forEach(h => h.classList.remove('hidden'));
+          tile.classList.add('ring-1', 'ring-emerald-400/40');
+        } else {
+          handles.forEach(h => h.classList.add('hidden'));
+          tile.classList.remove('ring-1', 'ring-emerald-400/40');
+        }
+        if (currentMode === 'move') tile.classList.add('cursor-move');
+        else tile.classList.remove('cursor-move');
+      });
+    }
+
+    // EXTRACTION & SAUVEGARDE JSON
+    function getArchitectureData() {
+      const tiles = Array.from(shapesLayer.querySelectorAll('.tile-item'));
+      return tiles.map(t => ({
+        label: t.querySelector('.tile-label').textContent,
+        type: t.dataset.type,
+        role: t.dataset.role || "standard",
+        x: parseInt(t.style.left),
+        y: parseInt(t.style.top),
+        w: parseInt(t.style.width),
+        h: parseInt(t.style.height)
+      }));
+    }
+
+    function saveToLocalStorage() {
+      const data = getArchitectureData();
+      localStorage.setItem('smartphone_grid_layout', JSON.stringify(data));
+    }
+
+    function loadFromLocalStorage() {
+      const saved = localStorage.getItem('smartphone_grid_layout');
+      if (!saved) return;
+      try {
+        const data = JSON.parse(saved);
+        shapesLayer.innerHTML = '';
+        data.forEach(item => {
+          createTile(item.x, item.y, item.w, item.h, item.type, item.role, false);
+        });
+        updateLabels();
+      } catch(e) { console.error(e); }
+    }
+
+    // GESTION MODALE JSON & FICHIERS
+    btnJson.addEventListener('click', () => {
+      updateLabels();
+      const data = getArchitectureData();
+      jsonTextarea.value = JSON.stringify(data, null, 2);
+      jsonModal.classList.remove('hidden');
+    });
+
+    closeModal.addEventListener('click', () => jsonModal.classList.add('hidden'));
+
+    btnCopyJson.addEventListener('click', () => {
+      jsonTextarea.select();
+      navigator.clipboard.writeText(jsonTextarea.value);
+      btnCopyJson.textContent = "Copié !";
+      setTimeout(() => btnCopyJson.textContent = "Copier JSON", 2000);
+    });
+
+    btnDownloadJson.addEventListener('click', () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonTextarea.value);
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `pwa-layout-${Date.now()}.json`);
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+    });
+
+    btnTriggerFile.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        jsonTextarea.value = event.target.result;
+      };
+      reader.readAsText(file);
+    });
+
+    btnImportJson.addEventListener('click', () => {
+      try {
+        const data = JSON.parse(jsonTextarea.value);
+        shapesLayer.innerHTML = '';
+        data.forEach(item => {
+          createTile(item.x, item.y, item.w, item.h, item.type, item.role || 'standard', false);
+        });
+        updateLabels();
+        saveToLocalStorage();
+        jsonModal.classList.add('hidden');
+      } catch(e) {
+        alert("Fichier JSON invalide !");
+      }
+    });
+
+    // TEMPLATES PRESETS
+    const PRESET_TEMPLATES = {
+      dashboard: [
+        { label: "A", type: "rect", role: "header", x: 0, y: 0, w: 360, h: 60 },
+        { label: "B", type: "rect", role: "search", x: 20, y: 80, w: 320, h: 40 },
+        { label: "C1", type: "rect", role: "card", x: 20, y: 140, w: 150, h: 120 },
+        { label: "C2", type: "rect", role: "card", x: 190, y: 140, w: 150, h: 120 },
+        { label: "D", type: "rect", role: "card", x: 20, y: 280, w: 320, h: 180 },
+        { label: "E", type: "rect", role: "button", x: 20, y: 480, w: 320, h: 50 },
+        { label: "F", type: "rect", role: "nav", x: 0, y: 640, w: 360, h: 60 }
+      ],
+      ecommerce: [
+        { label: "A1", type: "circle", role: "avatar", x: 20, y: 20, w: 40, h: 40 },
+        { label: "A2", type: "rect", role: "search", x: 80, y: 20, w: 260, h: 40 },
+        { label: "B", type: "rect", role: "card", x: 20, y: 80, w: 320, h: 140 },
+        { label: "C1", type: "rect", role: "card", x: 20, y: 240, w: 150, h: 180 },
+        { label: "C2", type: "rect", role: "card", x: 190, y: 240, w: 150, h: 180 },
+        { label: "D", type: "rect", role: "button", x: 20, y: 440, w: 320, h: 50 },
+        { label: "E", type: "rect", role: "nav", x: 0, y: 640, w: 360, h: 60 }
+      ],
+      chat: [
+        { label: "A1", type: "circle", role: "avatar", x: 20, y: 10, w: 40, h: 40 },
+        { label: "A2", type: "rect", role: "header", x: 70, y: 10, w: 270, h: 40 },
+        { label: "B", type: "rect", role: "card", x: 20, y: 80, w: 240, h: 60 },
+        { label: "C", type: "rect", role: "card", x: 100, y: 160, w: 240, h: 80 },
+        { label: "D", type: "rect", role: "card", x: 20, y: 260, w: 220, h: 60 },
+        { label: "E1", type: "rect", role: "input", x: 20, y: 620, w: 260, h: 50 },
+        { label: "E2", type: "rect", role: "button", x: 290, y: 620, w: 50, h: 50 }
+      ],
+      profile: [
+        { label: "A", type: "circle", role: "avatar", x: 130, y: 40, w: 100, h: 100 },
+        { label: "B", type: "rect", role: "card", x: 40, y: 160, w: 280, h: 40 },
+        { label: "C", type: "rect", role: "card", x: 20, y: 230, w: 320, h: 80 },
+        { label: "D", type: "rect", role: "card", x: 20, y: 330, w: 320, h: 80 },
+        { label: "E", type: "rect", role: "button", x: 20, y: 440, w: 320, h: 50 },
+        { label: "F", type: "rect", role: "nav", x: 0, y: 640, w: 360, h: 60 }
+      ]
+    };
+
+    btnTemplates.addEventListener('click', () => templatesModal.classList.remove('hidden'));
+    closeTemplatesModal.addEventListener('click', () => templatesModal.classList.add('hidden'));
+    btnCloseTemplatesFooter.addEventListener('click', () => templatesModal.classList.add('hidden'));
+
+    window.loadPresetTemplate = function(key) {
+      const templateData = PRESET_TEMPLATES[key];
+      if (!templateData) return;
+      shapesLayer.innerHTML = '';
+      templateData.forEach(item => {
+        createTile(item.x, item.y, item.w, item.h, item.type, item.role, false);
+      });
+      updateLabels();
+      saveToLocalStorage();
+      templatesModal.classList.add('hidden');
+      if (navigator.vibrate) navigator.vibrate(25);
+    };
+
+    // MODE LIVE PREVIEW UI GENERATOR
+    btnLivePreview.addEventListener('click', () => {
+      updateLabels();
+      renderLiveUI();
+      previewModal.classList.remove('hidden');
+    });
+    closePreviewModal.addEventListener('click', () => previewModal.classList.add('hidden'));
+    btnClosePreviewFooter.addEventListener('click', () => previewModal.classList.add('hidden'));
+
+    function renderLiveUI() {
+      const data = getArchitectureData();
+      liveUiViewport.innerHTML = '';
+
+      if (data.length === 0) {
+        liveUiViewport.innerHTML = `
+          <div class="flex flex-col items-center justify-center h-full text-zinc-500 p-6 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            <p class="text-xs">Aucune structure à afficher. Dessinez des formes ou chargez un template.</p>
+          </div>
+        `;
+        return;
+      }
+
+      data.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'absolute transition-all duration-200 overflow-hidden flex items-center justify-center';
+        el.style.left = `${item.x}px`;
+        el.style.top = `${item.y}px`;
+        el.style.width = `${item.w}px`;
+        el.style.height = `${item.h}px`;
+
+        const r = item.role.toLowerCase();
+
+        if (r === 'header') {
+          el.className += ' bg-zinc-900 border-b border-zinc-800 text-zinc-100 font-bold px-4 flex items-center justify-between text-xs shadow-md';
+          el.innerHTML = `<span class="truncate">${item.label} - Title Header</span><div class="w-2 h-2 rounded-full bg-emerald-500"></div>`;
+        } else if (r === 'button' || r === 'btn') {
+          el.className += ' bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center cursor-pointer active:scale-95 transition';
+          el.innerHTML = `<span>Action ${item.label}</span>`;
+        } else if (r === 'avatar') {
+          el.className += ' bg-gradient-to-tr from-purple-600 to-pink-500 rounded-full border-2 border-zinc-950 flex items-center justify-center text-white font-bold text-xs shadow-lg';
+          el.innerHTML = `<span>${item.label}</span>`;
+        } else if (r === 'search' || r === 'input') {
+          el.className += ' bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs px-3 rounded-xl flex items-center gap-2';
+          el.innerHTML = `<svg class="w-3.5 h-3.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><span class="truncate">${r === 'search' ? 'Rechercher...' : 'Saisir...'}</span>`;
+        } else if (r === 'nav' || r === 'footer') {
+          el.className += ' bg-zinc-900 border-t border-zinc-800 flex items-center justify-around text-[10px] text-zinc-400 font-medium px-2';
+          el.innerHTML = `
+            <div class="flex flex-col items-center text-indigo-400"><div class="w-3 h-3 bg-indigo-400/20 rounded-full mb-0.5"></div><span>Home</span></div>
+            <div class="flex flex-col items-center"><div class="w-3 h-3 bg-zinc-700 rounded-full mb-0.5"></div><span>Feed</span></div>
+            <div class="flex flex-col items-center"><div class="w-3 h-3 bg-zinc-700 rounded-full mb-0.5"></div><span>User</span></div>
+          `;
+        } else if (r === 'card') {
+          el.className += ' bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-3 flex flex-col justify-between shadow-xl';
+          el.innerHTML = `
+            <div class="flex items-center justify-between"><span class="text-[9px] font-bold text-indigo-400 uppercase font-mono">${item.label}</span><div class="w-1.5 h-1.5 bg-zinc-700 rounded-full"></div></div>
+            <div class="h-2 w-3/4 bg-zinc-800 rounded my-1"></div>
+            <div class="h-2 w-1/2 bg-zinc-800/60 rounded"></div>
+          `;
+        } else {
+          // Rôle standard par défaut
+          const isCircle = item.type === 'circle';
+          el.className += ` bg-zinc-900/60 border border-zinc-800/60 ${isCircle ? 'rounded-full' : 'rounded-xl'} p-2 flex flex-col items-center justify-center text-center backdrop-blur-sm`;
+          el.innerHTML = `<span class="text-[10px] font-mono text-zinc-300 font-bold">${item.label}</span><span class="text-[8px] text-zinc-500 uppercase">${item.role}</span>`;
+        }
+
+        liveUiViewport.appendChild(el);
+      });
+    }
+
+    // ÉTIQUETAGE HIÉRARCHIQUE AUTOMATIQUE
+    function updateLabels() {
+      const tiles = Array.from(shapesLayer.querySelectorAll('.tile-item'));
+      if (tiles.length === 0) return;
+
+      tiles.sort((a, b) => {
+        const topA = parseInt(a.style.top), topB = parseInt(b.style.top);
+        if (Math.abs(topA - topB) < 10) return parseInt(a.style.left) - parseInt(b.style.left);
+        return topA - topB;
+      });
+
+      const rows = [];
+      tiles.forEach(tile => {
+        const top = parseInt(tile.style.top);
+        let foundRow = rows.find(r => Math.abs(r.y - top) < 10);
+        if (foundRow) foundRow.tiles.push(tile);
+        else rows.push({ y: top, tiles: [tile] });
+      });
+
+      rows.forEach((row, rowIndex) => {
+        const letter = String.fromCharCode(65 + (rowIndex % 26));
+        const hasMultiple = row.tiles.length > 1;
+        row.tiles.forEach((tile, colIndex) => {
+          const labelSpan = tile.querySelector('.tile-label');
+          if (labelSpan) {
+            labelSpan.textContent = hasMultiple ? `${letter}${colIndex + 1}` : letter;
+          }
+        });
+      });
+      saveToLocalStorage();
+    }
+
+    // TRACÉ & INTERACTIONS
+    function startDrawing(e) {
+      if (currentMode !== 'rect' && currentMode !== 'circle') return;
+      const pos = getPos(e);
+      startX = snapToGrid(pos.x); startY = snapToGrid(pos.y);
+      currentX = startX; currentY = startY;
+      isDrawing = true;
+      drawPreview();
+    }
+
+    function moveAction(e) {
+      const pos = getPos(e);
+      const snappedX = snapToGrid(pos.x), snappedY = snapToGrid(pos.y);
+      coordInfo.textContent = `X: ${snappedX} | Y: ${snappedY}`;
+
+      if (isDrawing && (currentMode === 'rect' || currentMode === 'circle')) {
+        currentX = snappedX; currentY = snappedY;
+        drawPreview();
+      }
+
+      if (isDragging && activeTile && currentMode === 'move') {
+        const dx = snappedX - startX, dy = snappedY - startY;
+        let newX = Math.max(0, initialTileX + dx), newY = Math.max(0, initialTileY + dy);
+        const maxW = container.clientWidth - initialTileW, maxH = container.clientHeight - initialTileH;
+        newX = Math.min(newX, snapToGrid(maxW)); newY = Math.min(newY, snapToGrid(maxH));
+
+        if (isShiftPressed || e.shiftKey) {
+          if (!cloneTileGhost) createCloneGhost(initialTileX, initialTileY, initialTileW, initialTileH, activeTile.dataset.type);
+          activeTile.style.left = `${initialTileX}px`; activeTile.style.top = `${initialTileY}px`;
+          cloneTileGhost.style.left = `${newX}px`; cloneTileGhost.style.top = `${newY}px`;
+          targetClonePos = { x: newX, y: newY };
+        } else {
+          if (cloneTileGhost) { cloneTileGhost.remove(); cloneTileGhost = null; }
+          activeTile.style.left = `${newX}px`; activeTile.style.top = `${newY}px`;
+        }
+        updateLabels();
+      }
+
+      if (isResizing && activeTile && currentMode === 'resize') {
+        const dx = snappedX - startX, dy = snappedY - startY;
+        let newX = initialTileX, newY = initialTileY, newW = initialTileW, newH = initialTileH;
+
+        if (resizeHandle.includes('se')) { newW = Math.max(GRID_SIZE, initialTileW + dx); newH = Math.max(GRID_SIZE, initialTileH + dy); }
+        else if (resizeHandle.includes('sw')) {
+          const pW = initialTileW - dx;
+          if (pW >= GRID_SIZE) { newX = initialTileX + dx; newW = pW; }
+          newH = Math.max(GRID_SIZE, initialTileH + dy);
+        } else if (resizeHandle.includes('ne')) {
+          newW = Math.max(GRID_SIZE, initialTileW + dx);
+          const pH = initialTileH - dy;
+          if (pH >= GRID_SIZE) { newY = initialTileY + dy; newH = pH; }
+        } else if (resizeHandle.includes('nw')) {
+          const pW = initialTileW - dx;
+          if (pW >= GRID_SIZE) { newX = initialTileX + dx; newW = pW; }
+          const pH = initialTileH - dy;
+          if (pH >= GRID_SIZE) { newY = initialTileY + dy; newH = pH; }
+        }
+
+        if (activeTile.dataset.type === 'circle') {
+          const size = Math.max(newW, newH);
+          newW = size; newH = size;
+        }
+
+        activeTile.style.left = `${newX}px`; activeTile.style.top = `${newY}px`;
+        activeTile.style.width = `${newW}px`; activeTile.style.height = `${newH}px`;
+        updateLabels();
+      }
+    }
+
+    function endAction() {
+      if (isDrawing) {
+        isDrawing = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const x = Math.min(startX, currentX), y = Math.min(startY, currentY);
+        let width = Math.abs(currentX - startX), height = Math.abs(currentY - startY);
+        if (currentMode === 'circle') { const s = Math.max(width, height); width = s; height = s; }
+        if (width >= GRID_SIZE && height >= GRID_SIZE) {
+          createTile(x, y, width, height, currentMode, 'standard', true);
+          if (navigator.vibrate) navigator.vibrate(10);
+        }
+      }
+
+      if (isDragging) {
+        if (cloneTileGhost) {
+          const type = activeTile.dataset.type, role = activeTile.dataset.role;
+          cloneTileGhost.remove(); cloneTileGhost = null;
+          createTile(targetClonePos.x, targetClonePos.y, initialTileW, initialTileH, type, role, true);
+        }
+        isDragging = false; activeTile = null;
+        if (navigator.vibrate) navigator.vibrate(10);
+      }
+
+      if (isResizing) { isResizing = false; activeTile = null; resizeHandle = null; if (navigator.vibrate) navigator.vibrate(10); }
+    }
+
+    container.addEventListener('mousedown', startDrawing);
+    window.addEventListener('mousemove', moveAction);
+    window.addEventListener('mouseup', endAction);
+    container.addEventListener('touchstart', (e) => { startDrawing(e); e.preventDefault(); });
+    window.addEventListener('touchmove', moveAction);
+    window.addEventListener('touchend', endAction);
+
+    function drawPreview() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const x = Math.min(startX, currentX), y = Math.min(startY, currentY);
+      let width = Math.abs(currentX - startX), height = Math.abs(currentY - startY);
+
+      if (currentMode === 'circle') {
+        const s = Math.max(width, height); width = s; height = s;
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.2)'; ctx.strokeStyle = '#c084fc'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.arc(x + width / 2, y + height / 2, width / 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.2)'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+        ctx.fillRect(x, y, width, height); ctx.strokeRect(x, y, width, height);
+      }
+    }
+
+    function createCloneGhost(x, y, width, height, type) {
+      cloneTileGhost = document.createElement('div');
+      const isCircle = type === 'circle';
+      cloneTileGhost.className = `absolute ${isCircle ? 'rounded-full bg-purple-500/40 border-purple-400' : 'rounded-lg bg-blue-500/40 border-blue-400'} border-2 border-dashed shadow-2xl flex items-center justify-center pointer-events-none z-30 opacity-80`;
+      cloneTileGhost.style.left = `${x}px`; cloneTileGhost.style.top = `${y}px`;
+      cloneTileGhost.style.width = `${width}px`; cloneTileGhost.style.height = `${height}px`;
+      shapesLayer.appendChild(cloneTileGhost);
+    }
+
+    function createTile(x, y, width, height, type = 'rect', role = 'standard', shouldUpdate = true) {
+      const tile = document.createElement('div');
+      tile.dataset.type = type;
+      tile.dataset.role = role;
+      
+      const isCircle = type === 'circle';
+      tile.className = `tile-item absolute ${isCircle ? 'bg-purple-500/25 border-purple-500 rounded-full' : 'bg-amber-500/25 border-amber-500 rounded-lg'} border-2 shadow-lg flex flex-col items-center justify-center transition-transform active:scale-[0.99] animate-pop group`;
+      tile.style.left = `${x}px`; tile.style.top = `${y}px`;
+      tile.style.width = `${width}px`; tile.style.height = `${height}px`;
+
+      const label = document.createElement('span');
+      label.className = `tile-label text-xs font-mono ${isCircle ? 'text-purple-200' : 'text-amber-200'} font-extrabold drop-shadow`;
+      tile.appendChild(label);
+
+      const subRole = document.createElement('span');
+      subRole.className = `text-[8px] font-sans opacity-70 ${isCircle ? 'text-purple-300' : 'text-amber-300'}`;
+      subRole.textContent = role !== 'standard' ? role : '';
+      tile.appendChild(subRole);
+
+      // Poignées
+      ['nw', 'ne', 'sw', 'se'].forEach(h => {
+        const handle = document.createElement('div');
+        handle.className = `resize-handle absolute w-3.5 h-3.5 ${isCircle ? 'bg-purple-400' : 'bg-emerald-400'} border-2 border-zinc-950 rounded-full z-20 hidden ${
+          h === 'nw' ? '-top-1 -left-1 cursor-nwse-resize' :
+          h === 'ne' ? '-top-1 -right-1 cursor-nesw-resize' :
+          h === 'sw' ? '-bottom-1 -left-1 cursor-nesw-resize' :
+          '-bottom-1 -right-1 cursor-nwse-resize'
+        }`;
+        
+        const initResize = (e) => {
+          e.stopPropagation();
+          if (currentMode !== 'resize') return;
+          isResizing = true; activeTile = tile; resizeHandle = h;
+          const pos = getPos(e);
+          startX = snapToGrid(pos.x); startY = snapToGrid(pos.y);
+          initialTileX = parseInt(tile.style.left); initialTileY = parseInt(tile.style.top);
+          initialTileW = parseInt(tile.style.width); initialTileH = parseInt(tile.style.height);
+        };
+        handle.addEventListener('mousedown', initResize);
+        handle.addEventListener('touchstart', (e) => { initResize(e); e.preventDefault(); });
+        tile.appendChild(handle);
+      });
+
+      tile.addEventListener('mousedown', (e) => {
+        if (currentMode === 'move') {
+          e.stopPropagation();
+          isDragging = true; activeTile = tile;
+          const pos = getPos(e);
+          startX = snapToGrid(pos.x); startY = snapToGrid(pos.y);
+          initialTileX = parseInt(tile.style.left); initialTileY = parseInt(tile.style.top);
+          initialTileW = parseInt(tile.style.width); initialTileH = parseInt(tile.style.height);
+          targetClonePos = { x: initialTileX, y: initialTileY };
+        }
+      });
+
+      // Double-clic pour renommer le rôle
+      tile.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const newRole = prompt("Rôle de l'élément (ex: header, button, card, avatar, search, nav, input...) :", tile.dataset.role);
+        if (newRole !== null) {
+          tile.dataset.role = newRole.trim();
+          subRole.textContent = tile.dataset.role !== 'standard' ? tile.dataset.role : '';
+          saveToLocalStorage();
+        }
+      });
+
+      // Clic droit pour supprimer
+      tile.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        tile.remove();
+        updateLabels();
+        if (navigator.vibrate) navigator.vibrate(15);
+      });
+
+      shapesLayer.appendChild(tile);
+      updateTilesUI();
+      if (shouldUpdate) updateLabels();
+    }
+
+    loadFromLocalStorage();
+  </script>
+<script>
+if ('serviceWorker' in navigator) {
+window.addEventListener('load',()=>{
+navigator.serviceWorker.register('./sw.js').catch(err=>console.error(err));
+});
+}
+</script>
+</body>
+</html>
